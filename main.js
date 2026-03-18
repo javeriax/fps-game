@@ -1,0 +1,222 @@
+// ─── main.js ──────────────────────────────────────────────
+
+var gl, program;
+
+var roomPieces = [];
+
+var shadingMode = 2;
+var modeNames = ["WIREFRAME", "FLAT", "SMOOTH"];
+
+var keys = {};
+var mouseLocked = false;
+
+// ── Init ──────────────────────────────────────────────────
+window.onload = function init() {
+    var canvas = document.getElementById("gl-canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    camera.aspect = canvas.width / canvas.height;
+
+    gl = WebGLUtils.setupWebGL(canvas);
+    if (!gl) { alert("WebGL not available"); return; }
+
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clearColor(0.02, 0.02, 0.06, 1.0);
+    gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.POLYGON_OFFSET_FILL);
+    gl.polygonOffset(1.0, 1.0);
+
+    program = initShaders(gl, "vertex-shader", "fragment-shader");
+    gl.useProgram(program);
+
+    // upload room surfaces
+    var pieces = buildRoomPieces();
+    for (var i = 0; i < pieces.length; i++) {
+        var d = pieces[i].data;
+
+        var pb = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, pb);
+        gl.bufferData(gl.ARRAY_BUFFER, d.positions, gl.STATIC_DRAW);
+
+        var nb = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, nb);
+        gl.bufferData(gl.ARRAY_BUFFER, d.normals, gl.STATIC_DRAW);
+
+        var ib = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, d.indices, gl.STATIC_DRAW);
+
+        var eb = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, eb);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, d.edgeIndices, gl.STATIC_DRAW);
+
+        roomPieces.push({
+            posBuffer: pb,
+            normBuffer: nb,
+            idxBuffer: ib,
+            edgeBuffer: eb,
+            triCount: d.indices.length,
+            edgeCount: d.edgeIndices.length,
+            colour: pieces[i].colour
+        });
+    }
+
+    // input
+    window.addEventListener("keydown", function (e) {
+        keys[e.key] = true;
+        handleKeyDown(e);
+    });
+    window.addEventListener("keyup", function (e) {
+        keys[e.key] = false;
+    });
+
+    // click canvas to lock mouse
+    canvas.addEventListener("click", function () {
+        canvas.requestPointerLock();
+    });
+
+    document.addEventListener("pointerlockchange", function () {
+        mouseLocked = (document.pointerLockElement === canvas);
+        document.getElementById("clickPrompt").style.display =
+            mouseLocked ? "none" : "block";
+    });
+
+    // mousemove on document so it never gets blocked by pointer lock
+    document.addEventListener("mousemove", function (e) {
+        if (!mouseLocked) return;
+        cameraMouseLook(e.movementX, e.movementY);
+    });
+
+    window.addEventListener("resize", function () {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        camera.aspect = canvas.width / canvas.height;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+    });
+
+    render();
+};
+
+// ── Key handling ──────────────────────────────────────────
+function handleKeyDown(e) {
+    switch (e.key) {
+        case '1': shadingMode = 0; updateModeDisplay(); break;
+        case '2': shadingMode = 1; updateModeDisplay(); break;
+        case '3': shadingMode = 2; updateModeDisplay(); break;
+
+        case 'f': case 'F':
+            camera.fovy = (camera.fovy === 60) ? 90 : 60;
+            break;
+
+        case ']': camera.far = Math.min(500, camera.far + 10); break;
+        case '[': camera.far = Math.max(10, camera.far - 10); break;
+
+        // speed — Z slow down, X speed up (no conflict with movement keys)
+        case 'z': case 'Z':
+            camera.speed = Math.max(0.05, camera.speed - 0.05);
+            break;
+        case 'x': case 'X':
+            camera.speed = Math.min(1.0, camera.speed + 0.05);
+            break;
+    }
+}
+
+function updateModeDisplay() {
+    document.getElementById("modeDisplay").textContent =
+        "MODE: " + modeNames[shadingMode];
+}
+
+// ── Movement ──────────────────────────────────────────────
+// processMovement runs every frame — reads current yaw which
+// mouse updates live, so WASD direction is always relative
+// to where you are currently looking
+function processMovement() {
+    var spd = camera.speed;
+    var fwd = 0;
+    var right = 0;
+
+    if (keys['w'] || keys['W']) fwd += spd;
+    if (keys['s'] || keys['S']) fwd -= spd;
+    if (keys['a'] || keys['A']) right -= spd;
+    if (keys['d'] || keys['D']) right += spd;
+
+    if (fwd !== 0 || right !== 0) cameraMove(fwd, right);
+
+    // pitch keyboard fallback
+    if (keys['i'] || keys['I']) {
+        camera.pitch -= 1;
+        camera.pitch = Math.max(-89, camera.pitch);
+    }
+    if (keys['k'] || keys['K']) {
+        camera.pitch += 1;
+        camera.pitch = Math.min(89, camera.pitch);
+    }
+
+    // roll — Q/E only, no conflict with speed keys
+    if (keys['q'] || keys['Q']) camera.roll -= 1;
+    if (keys['e'] || keys['E']) camera.roll += 1;
+}
+
+// ── Draw one object ───────────────────────────────────────
+function drawObject(posBuffer, normBuffer, idxBuffer, edgeBuffer,
+    triCount, edgeCount, modelMat, colour) {
+
+    var uProj = gl.getUniformLocation(program, "uProjection");
+    var uView = gl.getUniformLocation(program, "uView");
+    var uModel = gl.getUniformLocation(program, "uModel");
+    var uNorm = gl.getUniformLocation(program, "uNormalMatrix");
+    var uColor = gl.getUniformLocation(program, "uColor");
+    var uShade = gl.getUniformLocation(program, "uShadingMode");
+    var uLight = gl.getUniformLocation(program, "uLightPos");
+    var uEye = gl.getUniformLocation(program, "uViewPos");
+
+    var proj = buildProjectionMatrix();
+    var view = buildViewMatrix();
+
+    gl.uniformMatrix4fv(uProj, false, mat4ToColumnMajor(proj));
+    gl.uniformMatrix4fv(uView, false, mat4ToColumnMajor(view));
+    gl.uniformMatrix4fv(uModel, false, mat4ToColumnMajor(modelMat));
+    gl.uniformMatrix3fv(uNorm, false, buildNormalMatrix(modelMat));
+
+    gl.uniform3fv(uLight, new Float32Array([0.0, 6.0, 0.0]));
+    gl.uniform3fv(uEye, new Float32Array([camera.x, camera.y, camera.z]));
+    gl.uniform3fv(uColor, new Float32Array(colour));
+    gl.uniform1i(uShade, shadingMode);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
+    var aPos = gl.getAttribLocation(program, "vPosition");
+    gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(aPos);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, normBuffer);
+    var aNorm = gl.getAttribLocation(program, "vNormal");
+    gl.vertexAttribPointer(aNorm, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(aNorm);
+
+    if (shadingMode === 0) {
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, edgeBuffer);
+        gl.drawElements(gl.LINES, edgeCount, gl.UNSIGNED_SHORT, 0);
+    } else {
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuffer);
+        gl.drawElements(gl.TRIANGLES, triCount, gl.UNSIGNED_SHORT, 0);
+    }
+}
+
+//Render loop
+function render() {
+    requestAnimFrame(render);
+    processMovement();   // always first — polls keys and updates camera
+
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    for (var i = 0; i < roomPieces.length; i++) {
+        var rp = roomPieces[i];
+        drawObject(
+            rp.posBuffer, rp.normBuffer,
+            rp.idxBuffer, rp.edgeBuffer,
+            rp.triCount, rp.edgeCount,
+            identityMat4(),
+            rp.colour
+        );
+    }
+}

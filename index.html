@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CS440 Project 1 - FPS Arena</title>
+
+    <script id="vertex-shader" type="x-shader/x-vertex">
+    attribute vec4 vPosition;
+    attribute vec3 vNormal;
+    uniform mat4 uProjection;
+    uniform mat4 uView;
+    uniform mat4 uModel;
+    uniform mat3 uNormalMatrix;
+    varying vec3 fNormal;
+    varying vec3 fFragPos;
+    void main() {
+      vec4 worldPos = uModel * vPosition;
+      gl_Position = uProjection * uView * worldPos;
+      fFragPos = vec3(worldPos);
+      fNormal = normalize(uNormalMatrix * vNormal);
+    }
+  </script>
+
+    <script id="fragment-shader" type="x-shader/x-fragment">
+  precision mediump float;
+  varying vec3 fNormal;
+  varying vec3 fFragPos;
+  uniform vec3 uColor;
+  uniform vec3 uLightPos;
+  uniform vec3 uViewPos;
+  uniform int  uShadingMode;
+
+  void main() {
+
+    if (uShadingMode == 0) {
+      // wireframe — glowing cyan
+      gl_FragColor = vec4(0.0, 1.0, 0.9, 1.0);
+
+    } else {
+
+      vec3 N = normalize(fNormal);
+
+      // main light — bright overhead
+      vec3 L1   = normalize(uLightPos - fFragPos);
+      float d1  = max(dot(N, L1), 0.0);
+
+      // second light — front left, warm white
+      vec3 L2   = normalize(vec3(-8.0, 3.0, -5.0) - fFragPos);
+      float d2  = max(dot(N, L2), 0.0) * 0.5;
+
+      // third light — right side, purple tint
+      vec3 L3   = normalize(vec3(10.0, 2.0, 5.0) - fFragPos);
+      float d3  = max(dot(N, L3), 0.0) * 0.4;
+
+      float ambient = 0.40;
+      float diff    = d1 + d2 + d3;
+
+      vec3 colour = uColor * (ambient + 0.65 * diff);
+
+      // Blinn-Phong specular on smooth mode only
+      if (uShadingMode == 2) {
+        vec3 V    = normalize(uViewPos - fFragPos);
+        vec3 H    = normalize(L1 + V);
+        float spec = pow(max(dot(N, H), 0.0), 48.0) * 0.7;
+        // cyan-tinted specular highlight
+        colour += vec3(0.3, 0.9, 1.0) * spec;
+      }
+
+      // cold blue bounce from floor
+      float bounce = max(dot(N, vec3(0.0, 1.0, 0.0)), 0.0) * 0.12;
+      colour += uColor * vec3(0.1, 0.3, 0.6) * bounce;
+
+      // distance fog
+      float dist      = length(fFragPos - uViewPos);
+      float fogFactor = clamp((dist - 6.0) / 25.0, 0.0, 1.0);
+      colour = mix(colour, vec3(0.02, 0.02, 0.06), fogFactor * 0.65);
+
+      gl_FragColor = vec4(colour, 1.0);
+    }
+  }
+</script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: monospace;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* ── crosshair ── */
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            pointer-events: none;
+        }
+
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(0, 255, 220, 0.85);
+        }
+
+        #crosshair::before {
+            width: 2px;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        #crosshair::after {
+            width: 100%;
+            height: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        /* ── click to start overlay ── */
+        #clickPrompt {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -120px);
+            color: rgba(0, 255, 220, 0.7);
+            font-size: 13px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            pointer-events: none;
+            text-shadow: 0 0 10px rgba(0, 255, 220, 0.5);
+        }
+
+        /* ── shading mode top right ── */
+        #modeDisplay {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: rgba(0, 220, 255, 0.7);
+            font-size: 12px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            pointer-events: none;
+            text-shadow: 0 0 8px rgba(0, 220, 255, 0.4);
+        }
+
+        /* ── controls bottom left ── */
+        #hud {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(100, 180, 200, 0.55);
+            font-size: 11px;
+            letter-spacing: 1px;
+            line-height: 1.9;
+            pointer-events: none;
+        }
+
+        #hud span {
+            color: rgba(0, 255, 220, 0.75);
+        }
+
+        /* ── score top left ── */
+        #score {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: rgba(0, 255, 220, 0.9);
+            font-size: 22px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            pointer-events: none;
+            text-shadow: 0 0 12px rgba(0, 255, 200, 0.6);
+        }
+
+        /* ── scan line overlay for atmosphere ── */
+        #scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(to bottom,
+                    transparent,
+                    transparent 2px,
+                    rgba(0, 0, 0, 0.07) 2px,
+                    rgba(0, 0, 0, 0.07) 4px);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* ── vignette corners ── */
+        #vignette {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center,
+                    transparent 55%,
+                    rgba(0, 0, 0, 0.75) 100%);
+            pointer-events: none;
+            z-index: 9;
+        }
+    </style>
+</head>
+
+<body>
+
+    <canvas id="gl-canvas"></canvas>
+
+    <!-- atmosphere overlays -->
+    <div id="scanlines"></div>
+    <div id="vignette"></div>
+
+    <!-- game UI -->
+    <div id="crosshair"></div>
+    <div id="clickPrompt">[ click to enter ]</div>
+    <div id="score">SCORE: 0</div>
+    <div id="modeDisplay">MODE: SMOOTH</div>
+    <div id="hud">
+        <span>WASD</span> MOVE &nbsp;&nbsp;
+        <span>MOUSE</span> LOOK<br>
+        <span>I / K</span> PITCH &nbsp;&nbsp;
+        <span>Q / E</span> ROLL<br>
+        <span>Z (slow) / X (fast)</span> SPEED &nbsp;&nbsp;
+        <span>[ / ]</span> FAR CLIP<br>
+        <span>F</span> TOGGLE FOV &nbsp;&nbsp;
+        <span>1 / 2 / 3</span> SHADING<br>
+        <span>SPACE</span> SHOOT
+    </div>
+
+    <script src="webgl-utils.js"></script>
+    <script src="initShaders.js"></script>
+    <script src="common.js"></script>
+    <script src="camera.js"></script>
+    <script src="room.js"></script>
+    <script src="main.js"></script>
+</body>
+
+</html>
