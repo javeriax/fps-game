@@ -23,8 +23,8 @@ function buildFloorGrid() {
     var indices = [];
     var edgeIndices = [];
 
-    var W = 20, D = 20;
-    var GRID = 20;
+    var W = 40, D = 40;
+    var GRID = 30;  // more grid squares so floor doesn't look stretched
 
     for (var row = 0; row < GRID; row++) {
         for (var col = 0; col < GRID; col++) {
@@ -50,7 +50,7 @@ function buildFloorGrid() {
 }
 
 function buildRoomPieces() {
-    var W = 20, H = 8, D = 20;
+    var W = 40, H = 10, D = 40;
 
     return [
         // floor — dark with subtle warm tint

@@ -1,4 +1,3 @@
-// ─── main.js ──────────────────────────────────────────────
 
 var gl, program;
 
@@ -10,7 +9,6 @@ var modeNames = ["WIREFRAME", "FLAT", "SMOOTH"];
 var keys = {};
 var mouseLocked = false;
 
-// ── Init ──────────────────────────────────────────────────
 window.onload = function init() {
     var canvas = document.getElementById("gl-canvas");
     canvas.width = window.innerWidth;
@@ -29,7 +27,6 @@ window.onload = function init() {
     program = initShaders(gl, "vertex-shader", "fragment-shader");
     gl.useProgram(program);
 
-    // upload room surfaces
     var pieces = buildRoomPieces();
     for (var i = 0; i < pieces.length; i++) {
         var d = pieces[i].data;
@@ -61,16 +58,17 @@ window.onload = function init() {
         });
     }
 
-    // input
-    window.addEventListener("keydown", function (e) {
+    // moved to document — pointer lock captures at document level
+    // window misses keydown events when mouse is locked
+    document.addEventListener("keydown", function (e) {
         keys[e.key] = true;
         handleKeyDown(e);
+        e.preventDefault();  // stops browser eating spacebar/arrows during pointer lock
     });
-    window.addEventListener("keyup", function (e) {
+    document.addEventListener("keyup", function (e) {
         keys[e.key] = false;
     });
 
-    // click canvas to lock mouse
     canvas.addEventListener("click", function () {
         canvas.requestPointerLock();
     });
@@ -81,7 +79,6 @@ window.onload = function init() {
             mouseLocked ? "none" : "block";
     });
 
-    // mousemove on document so it never gets blocked by pointer lock
     document.addEventListener("mousemove", function (e) {
         if (!mouseLocked) return;
         cameraMouseLook(e.movementX, e.movementY);
@@ -97,26 +94,53 @@ window.onload = function init() {
     render();
 };
 
-// ── Key handling ──────────────────────────────────────────
 function handleKeyDown(e) {
     switch (e.key) {
+
+        // shading modes
         case '1': shadingMode = 0; updateModeDisplay(); break;
         case '2': shadingMode = 1; updateModeDisplay(); break;
         case '3': shadingMode = 2; updateModeDisplay(); break;
 
+        // fov :60 narrow, 90 wide
         case 'f': case 'F':
             camera.fovy = (camera.fovy === 60) ? 90 : 60;
             break;
 
-        case ']': camera.far = Math.min(500, camera.far + 10); break;
-        case '[': camera.far = Math.max(10, camera.far - 10); break;
+        // far clip :T decreases, Y increases
+        case 't': case 'T':
+            camera.far = Math.max(10, camera.far - 10);
+            break;
+        case 'y': case 'Y':
+            camera.far = Math.min(500, camera.far + 10);
+            break;
 
-        // speed — Z slow down, X speed up (no conflict with movement keys)
-        case 'z': case 'Z':
+        // near clip: O decreases, P increases
+        case 'o': case 'O':
+            camera.near = Math.max(0.01, camera.near - 0.05);
+            break;
+        case 'p': case 'P':
+            camera.near = Math.min(5.0, camera.near + 0.05);
+            break;
+
+        // speed: V slows down, B speeds up
+        case 'v': case 'V':
             camera.speed = Math.max(0.05, camera.speed - 0.05);
             break;
-        case 'x': case 'X':
+        case 'b': case 'B':
             camera.speed = Math.min(1.0, camera.speed + 0.05);
+            break;
+        case 'r': case 'R':
+            camera.yaw = 0;
+            camera.pitch = 0;
+            camera.roll = 0;
+            camera.x = 0;
+            camera.y = 1.6;
+            camera.z = 4;
+            camera.fovy = 60;
+            camera.near = 0.1;
+            camera.far = 200;
+            camera.speed = 0.25;
             break;
     }
 }
@@ -126,10 +150,7 @@ function updateModeDisplay() {
         "MODE: " + modeNames[shadingMode];
 }
 
-// ── Movement ──────────────────────────────────────────────
-// processMovement runs every frame — reads current yaw which
-// mouse updates live, so WASD direction is always relative
-// to where you are currently looking
+//movement polled every frame
 function processMovement() {
     var spd = camera.speed;
     var fwd = 0;
@@ -142,22 +163,25 @@ function processMovement() {
 
     if (fwd !== 0 || right !== 0) cameraMove(fwd, right);
 
-    // pitch keyboard fallback
+    // pitch up/down via keyboard
     if (keys['i'] || keys['I']) {
         camera.pitch -= 1;
         camera.pitch = Math.max(-89, camera.pitch);
     }
-    if (keys['k'] || keys['K']) {
+    if (keys['n'] || keys['N']) {
         camera.pitch += 1;
         camera.pitch = Math.min(89, camera.pitch);
     }
 
-    // roll — Q/E only, no conflict with speed keys
+    // yaw left/right via keyboard
+    if (keys['h'] || keys['H']) camera.yaw -= 1;
+    if (keys['m'] || keys['M']) camera.yaw += 1;
+
+    // roll
     if (keys['q'] || keys['Q']) camera.roll -= 1;
     if (keys['e'] || keys['E']) camera.roll += 1;
 }
 
-// ── Draw one object ───────────────────────────────────────
 function drawObject(posBuffer, normBuffer, idxBuffer, edgeBuffer,
     triCount, edgeCount, modelMat, colour) {
 
@@ -202,10 +226,9 @@ function drawObject(posBuffer, normBuffer, idxBuffer, edgeBuffer,
     }
 }
 
-//Render loop
 function render() {
     requestAnimFrame(render);
-    processMovement();   // always first — polls keys and updates camera
+    processMovement();
 
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
