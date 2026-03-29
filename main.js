@@ -5,9 +5,12 @@ var roomPieces = [];
 
 var shadingMode = 2;
 var modeNames = ["WIREFRAME", "FLAT", "SMOOTH"];
-
+var sceneObjects = [];
 var keys = {};
 var mouseLocked = false;
+var score = 0;
+var shotsFired = 0;
+var hits = 0;
 
 window.onload = function init() {
     var canvas = document.getElementById("gl-canvas");
@@ -58,6 +61,44 @@ window.onload = function init() {
         });
     }
 
+    var objs = createSceneObjects();
+
+    for (var i = 0; i < objs.length; i++) {
+        var d = objs[i].data;
+
+        var pb = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, pb);
+        gl.bufferData(gl.ARRAY_BUFFER, d.positions, gl.STATIC_DRAW);
+
+        var nb = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, nb);
+        gl.bufferData(gl.ARRAY_BUFFER, d.normals, gl.STATIC_DRAW);
+
+        var ib = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, d.indices, gl.STATIC_DRAW);
+
+        var eb = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, eb);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, d.edgeIndices, gl.STATIC_DRAW);
+
+        sceneObjects.push({
+            name: objs[i].name,
+            posBuffer: pb,
+            normBuffer: nb,
+            idxBuffer: ib,
+            edgeBuffer: eb,
+            triCount: d.indices.length,
+            edgeCount: d.edgeIndices.length,
+            colour: objs[i].colour.slice(),
+            baseColour: objs[i].colour.slice(),
+            position: objs[i].position,
+            rotation: objs[i].rotation,
+            scale: objs[i].scale,
+            hitTimer: 0
+        });
+    }
+
     // moved to document — pointer lock captures at document level
     // window misses keydown events when mouse is locked
     document.addEventListener("keydown", function (e) {
@@ -84,6 +125,13 @@ window.onload = function init() {
         cameraMouseLook(e.movementX, e.movementY);
     });
 
+    document.addEventListener("mousedown", function (e) {
+    if (!mouseLocked) return;
+    if (e.button === 0) {
+        fireShot();
+    }
+});
+
     window.addEventListener("resize", function () {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -91,11 +139,15 @@ window.onload = function init() {
         gl.viewport(0, 0, canvas.width, canvas.height);
     });
 
+    updateScoreDisplay();
+
     render();
+
 };
 
 function handleKeyDown(e) {
     switch (e.key) {
+        case ' ': fireShot(); break;
 
         // shading modes
         case '1': shadingMode = 0; updateModeDisplay(); break;
@@ -182,6 +234,69 @@ function processMovement() {
     if (keys['e'] || keys['E']) camera.roll += 1;
 }
 
+function updateScoreDisplay() {
+    document.getElementById("score").textContent = "SCORE: " + score;
+}
+
+function getCameraForwardVector() {
+    var yawRad = camera.yaw * Math.PI / 180;
+    var pitchRad = camera.pitch * Math.PI / 180;
+
+    var x = -Math.sin(yawRad) * Math.cos(pitchRad);
+    var y = Math.sin(pitchRad);
+    var z = -Math.cos(yawRad) * Math.cos(pitchRad);
+
+    var len = Math.sqrt(x * x + y * y + z * z);
+    if (len === 0) len = 1;
+
+    return [x / len, y / len, z / len];
+}
+
+function rayHitsSphere(rayOrigin, rayDir, sphereCenter, sphereRadius) {
+    var ox = rayOrigin[0] - sphereCenter[0];
+    var oy = rayOrigin[1] - sphereCenter[1];
+    var oz = rayOrigin[2] - sphereCenter[2];
+
+    var b = 2 * (ox * rayDir[0] + oy * rayDir[1] + oz * rayDir[2]);
+    var c = ox * ox + oy * oy + oz * oz - sphereRadius * sphereRadius;
+
+    var disc = b * b - 4 * c;
+    return disc >= 0;
+}
+
+function getObjectRadius(obj) {
+    if (obj.name === "cube") return 2.2;
+    if (obj.name === "sphere") return 2.0;
+    if (obj.name === "torus") return 2.6;
+    return 2.0;
+}
+
+function respawnObject(obj) {
+    obj.position[0] = -18 + Math.random() * 36;
+    obj.position[1] = 2.0 + Math.random() * 3.5;
+    obj.position[2] = -14 - Math.random() * 18;
+}
+
+function fireShot() {
+    var origin = [camera.x, camera.y, camera.z];
+    var dir = getCameraForwardVector();
+
+    for (var i = 0; i < sceneObjects.length; i++) {
+        var obj = sceneObjects[i];
+        var center = [obj.position[0], obj.position[1], obj.position[2]];
+        var radius = getObjectRadius(obj);
+
+        if (rayHitsSphere(origin, dir, center, radius)) {
+            score += 1;
+            updateScoreDisplay();
+            obj.colour = [1.0, 1.0, 1.0];
+            obj.hitTimer = 0.15;
+            respawnObject(obj);
+            break;
+        }
+    }
+}
+
 function drawObject(posBuffer, normBuffer, idxBuffer, edgeBuffer,
     triCount, edgeCount, modelMat, colour) {
 
@@ -226,12 +341,17 @@ function drawObject(posBuffer, normBuffer, idxBuffer, edgeBuffer,
     }
 }
 
+
 function render() {
     requestAnimFrame(render);
     processMovement();
 
+    var time = performance.now() * 0.001;
+    updateSceneObjects(time);
+
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+    // --- DRAW ROOM ---
     for (var i = 0; i < roomPieces.length; i++) {
         var rp = roomPieces[i];
         drawObject(
@@ -242,4 +362,38 @@ function render() {
             rp.colour
         );
     }
+    for (var i = 0; i < sceneObjects.length; i++) {
+    var obj = sceneObjects[i];
+    var modelMat = buildObjectModelMatrix(obj);
+
+    drawObject(
+        obj.posBuffer,
+        obj.normBuffer,
+        obj.idxBuffer,
+        obj.edgeBuffer,
+        obj.triCount,
+        obj.edgeCount,
+        modelMat,
+        obj.colour
+    );
+}
+
+
+
+    // --- DRAW YOUR OBJECTS ---
+    // for (var i = 0; i < sceneObjects.length; i++) {
+    //     var obj = sceneObjects[i];
+    //     var modelMat = buildObjectModelMatrix(obj);
+
+    //     drawObject(
+    //         obj.posBuffer,
+    //         obj.normBuffer,
+    //         obj.idxBuffer,
+    //         obj.edgeBuffer,
+    //         obj.triCount,
+    //         obj.edgeCount,
+    //         modelMat,
+    //         obj.colour
+    //     );
+    // }
 }
