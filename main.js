@@ -1,4 +1,3 @@
-
 var gl, program;
 
 var roomPieces = [];
@@ -27,36 +26,7 @@ window.onload = function init() {
     program = initShaders(gl, "vertex-shader", "fragment-shader");
     gl.useProgram(program);
 
-    var pieces = buildRoomPieces();
-    for (var i = 0; i < pieces.length; i++) {
-        var d = pieces[i].data;
-
-        var pb = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, pb);
-        gl.bufferData(gl.ARRAY_BUFFER, d.positions, gl.STATIC_DRAW);
-
-        var nb = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, nb);
-        gl.bufferData(gl.ARRAY_BUFFER, d.normals, gl.STATIC_DRAW);
-
-        var ib = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, d.indices, gl.STATIC_DRAW);
-
-        var eb = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, eb);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, d.edgeIndices, gl.STATIC_DRAW);
-
-        roomPieces.push({
-            posBuffer: pb,
-            normBuffer: nb,
-            idxBuffer: ib,
-            edgeBuffer: eb,
-            triCount: d.indices.length,
-            edgeCount: d.edgeIndices.length,
-            colour: pieces[i].colour
-        });
-    }
+    uploadRoom(camera.roomHalfW, camera.roomHalfD);
 
     // moved to document — pointer lock captures at document level
     // window misses keydown events when mouse is locked
@@ -94,6 +64,50 @@ window.onload = function init() {
     render();
 };
 
+// builds and uploads room geometry to gpu
+// called on init and whenever room size changes
+function uploadRoom(W, D) {
+    // delete old buffers from gpu if they exist
+    for (var i = 0; i < roomPieces.length; i++) {
+        gl.deleteBuffer(roomPieces[i].posBuffer);
+        gl.deleteBuffer(roomPieces[i].normBuffer);
+        gl.deleteBuffer(roomPieces[i].idxBuffer);
+        gl.deleteBuffer(roomPieces[i].edgeBuffer);
+    }
+    roomPieces = [];
+
+    var pieces = buildRoomPieces(W, D);
+    for (var i = 0; i < pieces.length; i++) {
+        var d = pieces[i].data;
+
+        var pb = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, pb);
+        gl.bufferData(gl.ARRAY_BUFFER, d.positions, gl.STATIC_DRAW);
+
+        var nb = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, nb);
+        gl.bufferData(gl.ARRAY_BUFFER, d.normals, gl.STATIC_DRAW);
+
+        var ib = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, d.indices, gl.STATIC_DRAW);
+
+        var eb = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, eb);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, d.edgeIndices, gl.STATIC_DRAW);
+
+        roomPieces.push({
+            posBuffer: pb,
+            normBuffer: nb,
+            idxBuffer: ib,
+            edgeBuffer: eb,
+            triCount: d.indices.length,
+            edgeCount: d.edgeIndices.length,
+            colour: pieces[i].colour
+        });
+    }
+}
+
 function handleKeyDown(e) {
     switch (e.key) {
 
@@ -130,6 +144,21 @@ function handleKeyDown(e) {
         case 'b': case 'B':
             camera.speed = Math.min(1.0, camera.speed + 0.05);
             break;
+
+        // expand room boundary — walls and floor grow outward
+        case 'g': case 'G':
+            camera.roomHalfW = Math.min(200, camera.roomHalfW + 5);
+            camera.roomHalfD = Math.min(200, camera.roomHalfD + 5);
+            uploadRoom(camera.roomHalfW, camera.roomHalfD);
+            break;
+
+        // shrink room boundary i.e., pull bounds back in
+        case 'c': case 'C':
+            camera.roomHalfW = Math.max(10, camera.roomHalfW - 5);
+            camera.roomHalfD = Math.max(10, camera.roomHalfD - 5);
+            uploadRoom(camera.roomHalfW, camera.roomHalfD);
+            break;
+
         case 'r': case 'R':
             camera.yaw = 0;
             camera.pitch = 0;
@@ -141,6 +170,9 @@ function handleKeyDown(e) {
             camera.near = 0.1;
             camera.far = 200;
             camera.speed = 0.25;
+            camera.roomHalfW = 40;
+            camera.roomHalfD = 40;
+            uploadRoom(camera.roomHalfW, camera.roomHalfD);
             break;
     }
 }
@@ -163,23 +195,10 @@ function processMovement() {
 
     if (fwd !== 0 || right !== 0) cameraMove(fwd, right);
 
-    // pitch up/down via keyboard
-    if (keys['i'] || keys['I']) {
-        camera.pitch -= 1;
-        camera.pitch = Math.max(-89, camera.pitch);
-    }
-    if (keys['n'] || keys['N']) {
-        camera.pitch += 1;
-        camera.pitch = Math.min(89, camera.pitch);
-    }
-
-    // yaw left/right via keyboard
-    if (keys['h'] || keys['H']) camera.yaw -= 1;
-    if (keys['m'] || keys['M']) camera.yaw += 1;
-
     // roll
     if (keys['q'] || keys['Q']) camera.roll -= 1;
     if (keys['e'] || keys['E']) camera.roll += 1;
+    camera.roll = Math.max(-5, Math.min(5, camera.roll));
 }
 
 function drawObject(posBuffer, normBuffer, idxBuffer, edgeBuffer,
