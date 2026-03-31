@@ -421,9 +421,6 @@ function render() {
         }
     }
 
-    var time = performance.now() * 0.001;
-    updateSceneObjects(time);
-
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     var proj = buildProjectionMatrix();
