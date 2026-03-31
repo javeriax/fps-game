@@ -5,135 +5,136 @@
     <title>CS440 Project 1 - FPS Arena</title>
 
     <script id="vertex-shader" type="x-shader/x-vertex">
+    precision mediump float;
+    precision mediump int;
+
     attribute vec4 vPosition;
     attribute vec3 vNormal;
+
     uniform mat4 uProjection;
     uniform mat4 uView;
     uniform mat4 uModel;
     uniform mat3 uNormalMatrix;
+    uniform int  uShadingMode;
+    uniform vec3 uLightPos;
+
     varying vec3 fNormal;
     varying vec3 fFragPos;
+    varying float fVertexLight;
+
     void main() {
-      vec4 worldPos = uModel * vPosition;
-      gl_Position = uProjection * uView * worldPos;
-      fFragPos = vec3(worldPos);
-      fNormal = normalize(uNormalMatrix * vNormal);
+        vec4 worldPos = uModel * vPosition;
+        gl_Position = uProjection * uView * worldPos;
+        fFragPos = vec3(worldPos);
+        fNormal = normalize(uNormalMatrix * vNormal);
+
+        if (uShadingMode == 1) {
+            vec3 N = fNormal;
+            vec3 L1 = normalize(uLightPos - fFragPos);
+            float d1 = max(dot(N, L1), 0.0);
+            vec3 L2 = normalize(vec3(-8.0, 3.0, -5.0) - fFragPos);
+            float d2 = max(dot(N, L2), 0.0) * 0.5;
+            vec3 L3 = normalize(vec3(10.0, 2.0, 5.0) - fFragPos);
+            float d3 = max(dot(N, L3), 0.0) * 0.4;
+            fVertexLight = 0.40 + d1 + d2 + d3;
+        } else {
+            fVertexLight = 1.0;
+        }
     }
-  </script>
+    </script>
 
     <script id="fragment-shader" type="x-shader/x-fragment">
-  precision mediump float;
-  varying vec3 fNormal;
-  varying vec3 fFragPos;
-  uniform vec3 uColor;
-  uniform vec3 uLightPos;
-  uniform vec3 uViewPos;
-  uniform int  uShadingMode;
+    precision mediump float;
+    precision mediump int;
 
-  void main() {
+    varying vec3 fNormal;
+    varying vec3 fFragPos;
+    varying float fVertexLight;
 
-    if (uShadingMode == 0) {
-      // wireframe — glowing cyan
-      gl_FragColor = vec4(0.0, 1.0, 0.9, 1.0);
+    uniform vec3 uColor;
+    uniform vec3 uLightPos;
+    uniform vec3 uViewPos;
+    uniform int  uShadingMode;
 
-    } else {
+    void main() {
+        vec3 colour;
+        float fogDist;
+        float fogFactor;
 
-      vec3 N = normalize(fNormal);
+        if (uShadingMode == 0) {
+            gl_FragColor = vec4(uColor, 1.0);
+            return;
+        }
 
-      // main light — bright overhead
-      vec3 L1   = normalize(uLightPos - fFragPos);
-      float d1  = max(dot(N, L1), 0.0);
+        if (uShadingMode == 1) {
+            colour = uColor * fVertexLight;
+        } else {
+            vec3 N = normalize(fNormal);
 
-      // second light — front left, warm white
-      vec3 L2   = normalize(vec3(-8.0, 3.0, -5.0) - fFragPos);
-      float d2  = max(dot(N, L2), 0.0) * 0.5;
+            vec3 L1 = normalize(uLightPos - fFragPos);
+            float d1 = max(dot(N, L1), 0.0);
+            vec3 L2 = normalize(vec3(-8.0, 3.0, -5.0) - fFragPos);
+            float d2 = max(dot(N, L2), 0.0) * 0.5;
+            vec3 L3 = normalize(vec3(10.0, 2.0, 5.0) - fFragPos);
+            float d3 = max(dot(N, L3), 0.0) * 0.4;
 
-      // third light — right side, purple tint
-      vec3 L3   = normalize(vec3(10.0, 2.0, 5.0) - fFragPos);
-      float d3  = max(dot(N, L3), 0.0) * 0.4;
+            float ambient = 0.40;
+            float diff = d1 + d2 + d3;
+            colour = uColor * (ambient + 0.65 * diff);
 
-      float ambient = 0.40;
-      float diff    = d1 + d2 + d3;
+            vec3 V = normalize(uViewPos - fFragPos);
+            vec3 H = normalize(L1 + V);
+            float spec = pow(max(dot(N, H), 0.0), 48.0) * 0.7;
+            colour += vec3(0.3, 0.9, 1.0) * spec;
 
-      vec3 colour = uColor * (ambient + 0.65 * diff);
+            float bounce = max(dot(N, vec3(0.0, 1.0, 0.0)), 0.0) * 0.12;
+            colour += uColor * vec3(0.1, 0.3, 0.6) * bounce;
+        }
 
-      // Blinn-Phong specular on smooth mode only
-      if (uShadingMode == 2) {
-        vec3 V    = normalize(uViewPos - fFragPos);
-        vec3 H    = normalize(L1 + V);
-        float spec = pow(max(dot(N, H), 0.0), 48.0) * 0.7;
-        // cyan-tinted specular highlight
-        colour += vec3(0.3, 0.9, 1.0) * spec;
-      }
+        fogDist = length(fFragPos - uViewPos);
+        fogFactor = clamp((fogDist - 6.0) / 25.0, 0.0, 1.0);
+        colour = mix(colour, vec3(0.02, 0.02, 0.06), fogFactor * 0.65);
 
-      // cold blue bounce from floor
-      float bounce = max(dot(N, vec3(0.0, 1.0, 0.0)), 0.0) * 0.12;
-      colour += uColor * vec3(0.1, 0.3, 0.6) * bounce;
-
-      // distance fog
-      float dist      = length(fFragPos - uViewPos);
-      float fogFactor = clamp((dist - 6.0) / 25.0, 0.0, 1.0);
-      colour = mix(colour, vec3(0.02, 0.02, 0.06), fogFactor * 0.65);
-
-      gl_FragColor = vec4(colour, 1.0);
+        gl_FragColor = vec4(colour, 1.0);
     }
-  }
-</script>
+    </script>
 
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             background: #000;
             overflow: hidden;
-            font-family: monospace;
+            font-family: 'Courier New', monospace;
         }
 
-        canvas {
-            display: block;
-        }
+        canvas { display: block; }
 
-        /* ── crosshair ── */
         #crosshair {
             position: fixed;
-            top: 50%;
-            left: 50%;
+            top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            width: 20px;
-            height: 20px;
+            width: 20px; height: 20px;
             pointer-events: none;
+            z-index: 11;
         }
-
-        #crosshair::before,
-        #crosshair::after {
+        #crosshair::before, #crosshair::after {
             content: '';
             position: absolute;
             background: rgba(0, 255, 220, 0.85);
         }
-
         #crosshair::before {
-            width: 2px;
-            height: 100%;
-            left: 50%;
-            transform: translateX(-50%);
+            width: 2px; height: 100%;
+            left: 50%; transform: translateX(-50%);
         }
-
         #crosshair::after {
-            width: 100%;
-            height: 2px;
-            top: 50%;
-            transform: translateY(-50%);
+            width: 100%; height: 2px;
+            top: 50%; transform: translateY(-50%);
         }
 
-        /* ── click to start overlay ── */
         #clickPrompt {
             position: fixed;
-            top: 50%;
-            left: 50%;
+            top: 50%; left: 50%;
             transform: translate(-50%, -120px);
             color: rgba(0, 255, 220, 0.7);
             font-size: 13px;
@@ -141,76 +142,73 @@
             text-transform: uppercase;
             pointer-events: none;
             text-shadow: 0 0 10px rgba(0, 255, 220, 0.5);
+            z-index: 11;
         }
 
-        /* ── shading mode top right ── */
         #modeDisplay {
             position: fixed;
-            top: 20px;
-            right: 20px;
+            top: 20px; right: 20px;
             color: rgba(0, 220, 255, 0.7);
             font-size: 12px;
             letter-spacing: 2px;
             text-transform: uppercase;
             pointer-events: none;
             text-shadow: 0 0 8px rgba(0, 220, 255, 0.4);
+            z-index: 11;
         }
 
-        /* ── controls bottom left ── */
-        #hud {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            color: rgba(100, 180, 200, 0.55);
-            font-size: 11px;
-            letter-spacing: 1px;
-            line-height: 1.9;
-            pointer-events: none;
-        }
-
-        #hud span {
-            color: rgba(0, 255, 220, 0.75);
-        }
-
-        /* ── score top left ── */
         #score {
             position: fixed;
-            top: 20px;
-            left: 20px;
+            bottom: 20px; left: 20px;
             color: rgba(0, 255, 220, 0.9);
             font-size: 22px;
             letter-spacing: 4px;
             text-transform: uppercase;
             pointer-events: none;
             text-shadow: 0 0 12px rgba(0, 255, 200, 0.6);
+            z-index: 11;
         }
 
-        /* ── scan line overlay for atmosphere ── */
+        #ammo {
+            position: fixed;
+            bottom: 20px; right: 20px;
+            color: white;
+            font-weight: bold;
+            font-size: 20px;
+            letter-spacing: 3px;
+            background: rgba(0, 0, 0, 0.45);
+            padding: 8px 16px;
+            pointer-events: none;
+            z-index: 11;
+        }
+
+        #hud {
+            position: fixed;
+            bottom: 65px; left: 20px;
+            color: rgba(100, 180, 200, 0.55);
+            font-size: 11px;
+            letter-spacing: 1px;
+            line-height: 1.9;
+            pointer-events: none;
+            z-index: 11;
+        }
+        #hud span { color: rgba(0, 255, 220, 0.75); }
+
         #scanlines {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             background: repeating-linear-gradient(to bottom,
-                    transparent,
-                    transparent 2px,
-                    rgba(0, 0, 0, 0.07) 2px,
-                    rgba(0, 0, 0, 0.07) 4px);
+                transparent, transparent 2px,
+                rgba(0, 0, 0, 0.07) 2px, rgba(0, 0, 0, 0.07) 4px);
             pointer-events: none;
             z-index: 10;
         }
 
-        /* ── vignette corners ── */
         #vignette {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             background: radial-gradient(ellipse at center,
-                    transparent 55%,
-                    rgba(0, 0, 0, 0.75) 100%);
+                transparent 55%, rgba(0, 0, 0, 0.75) 100%);
             pointer-events: none;
             z-index: 9;
         }
@@ -221,27 +219,24 @@
 
     <canvas id="gl-canvas"></canvas>
 
-    <!-- atmosphere overlays -->
     <div id="scanlines"></div>
     <div id="vignette"></div>
 
-    <!-- game UI -->
     <div id="crosshair"></div>
     <div id="clickPrompt">[ click to enter ]</div>
     <div id="score">SCORE: 0</div>
     <div id="modeDisplay">MODE: SMOOTH</div>
+    <div id="ammo">30 / 30</div>
     <div id="hud">
         <span>WASD</span> MOVE &nbsp;&nbsp;
         <span>MOUSE</span> LOOK<br>
-        <span>I / N</span> PITCH &nbsp;&nbsp;
-        <span>H / M</span> YAW &nbsp;&nbsp;
-        <span>Q / E</span> ROLL<br>
-        <span>V / B </span> SPEED &nbsp;&nbsp;
+        <span>Q / E</span> LEAN &nbsp;&nbsp;
         <span>F</span> FOV<br>
-        <span>T/ Y</span> FAR CLIP &nbsp;&nbsp;
+        <span>V / B</span> SPEED &nbsp;&nbsp;
         <span>O / P</span> NEAR CLIP<br>
-        <span>1 / 2 / 3</span> SHADING
-        <span>R</span> RESET VIEW<br>
+        <span>T / Y</span> FAR CLIP<br>
+        <span>1 / 2 / 3</span> SHADING &nbsp;&nbsp;
+        <span>R</span> RESET VIEW
     </div>
 
     <script src="webgl-utils.js"></script>
@@ -249,6 +244,7 @@
     <script src="common.js"></script>
     <script src="camera.js"></script>
     <script src="room.js"></script>
+    <script src="objects.js"></script>
     <script src="main.js"></script>
 </body>
 
