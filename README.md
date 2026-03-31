@@ -15,7 +15,7 @@ WebGL first-person shooter. Open `index.html` in Chrome or Firefox.
 | H / M | Yaw — turn left / right via keyboard |
 | I / N | Pitch — look up / down via keyboard |
 | Q / E | Roll — tilt the camera sideways |
-| U / J | Speed down / up |
+| v / B | Speed down / up |
 
 Movement direction always matches where you're looking. WASD and mouse work simultaneously.
 

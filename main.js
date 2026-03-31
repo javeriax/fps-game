@@ -10,9 +10,12 @@ var gunGLBuffers = null;
 
 var shadingMode = 2;
 var modeNames = ["WIREFRAME", "FLAT", "SMOOTH"];
-
+var sceneObjects = [];
 var keys = {};
 var mouseLocked = false;
+var score = 0;
+var shotsFired = 0;
+var hits = 0;
 
 var score = 0;
 var ammo = 30;
@@ -396,6 +399,7 @@ function updateScoreDisplay() {
     document.getElementById('score').textContent = 'SCORE: ' + score;
 }
 
+
 function render() {
     requestAnimFrame(render);
 
@@ -416,6 +420,9 @@ function render() {
             updateAmmoDisplay();
         }
     }
+
+    var time = performance.now() * 0.001;
+    updateSceneObjects(time);
 
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
