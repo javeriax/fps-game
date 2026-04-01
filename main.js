@@ -34,6 +34,7 @@ var lastTime = 0;
 var gameTime = 0;
 var isMoving = false;
 var lastFireTime = 0;
+var audioCtx = null;
 
 window.onload = function init() {
     var canvas = document.getElementById("gl-canvas");
@@ -216,6 +217,8 @@ function setupInput(canvas) {
     });
 
     canvas.addEventListener("mousedown", function(e) {
+        ensureAudio();
+
         if (mouseLocked) {
             if (e.button === 0) fire();
         } else {
@@ -305,6 +308,7 @@ function fire() {
 
     ammo--;
     triggerGunKick();
+    playShootSound();
 
     flashFrames = 2;
     generateFlashLines();
@@ -334,6 +338,7 @@ function fire() {
         score++;
         hits++;
         updateAccuracyDisplay();
+        playHitSound();
         dummies[hitIndex].color = [1.0, 1.0, 1.0];
         dummies[hitIndex].hitTimer = 0.2;
         dummies[hitIndex].fallState = "falling";
@@ -419,6 +424,55 @@ function updateAccuracyDisplay() {
         'ACCURACY: ' + acc.toFixed(0) + '%';
 }
 
+function ensureAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    if (audioCtx.state === "suspended") {
+        audioCtx.resume();
+    }
+}
+
+function playShootSound() {
+    ensureAudio();
+
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+
+    osc.type = "square";
+    osc.frequency.setValueAtTime(220, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(90, audioCtx.currentTime + 0.09);
+
+    gain.gain.setValueAtTime(0.9, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.09);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.09);
+}
+
+function playHitSound() {
+    ensureAudio();
+
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(500, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1100, audioCtx.currentTime + 0.12);
+
+    gain.gain.setValueAtTime(0.14, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.12);
+}
 
 function render() {
     requestAnimFrame(render);
