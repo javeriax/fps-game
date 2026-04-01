@@ -239,13 +239,13 @@ function triggerGunKick() {
 }
 
 function buildGunModelMatrix() {
-    var tx = 0.38 + gunBobX;
-    var ty = -0.32 + gunBobY + gunKickY;
+    var tx = 0.25 + gunBobX;
+    var ty = -0.25 + gunBobY + gunKickY;
     var tz = -0.45 + gunKickZ;
 
     var T = cam_T(tx, ty, tz);
-    var Ry = cam_Ry(180 - 20);
-    var Rx = cam_Rx(-4);
+    var Ry = cam_Ry(180 -10);
+    var Rx = cam_Rx(7);
     var S = cam_S(gunNormScale, gunNormScale, gunNormScale);
     var center = cam_T(-gunCenter[0], -gunCenter[1], -gunCenter[2]);
 
