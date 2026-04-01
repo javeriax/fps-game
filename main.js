@@ -264,6 +264,9 @@ function handleKeyDown(e) {
         case 'b': case 'B':
             camera.speed = Math.min(1.0, camera.speed + 0.05); break;
         case 'r': case 'R':
+            if (!reloading && ammo < maxAmmo) startReload();
+            break;
+        case 'Tab':
             camera.yaw = 0; camera.pitch = 0;
             camera.leanAngle = 0; camera.leanOffset = 0;
             camera.x = 0; camera.y = 1.65; camera.z = 4;
