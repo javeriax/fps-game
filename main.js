@@ -250,17 +250,18 @@ function handleKeyDown(e) {
         case 'o': case 'O':
             camera.near = Math.max(0.01, camera.near - 0.05); break;
         case 'p': case 'P':
-            camera.near = Math.min(5.0, camera.near + 0.05); break;
-        case 'v': case 'V':
-            camera.speed = Math.max(0.05, camera.speed - 0.05); break;
-        case 'b': case 'B':
-            camera.speed = Math.min(1.0, camera.speed + 0.05); break;
-        case 'r': case 'R':
             camera.yaw = 0; camera.pitch = 0;
             camera.leanAngle = 0; camera.leanOffset = 0;
             camera.x = 0; camera.y = 1.65; camera.z = 4;
             camera.fovy = 60; camera.near = 0.1; camera.far = 200;
             camera.speed = 0.25;
+            break;
+        case 'v': case 'V':
+            camera.speed = Math.max(0.05, camera.speed - 0.05); break;
+        case 'b': case 'B':
+            camera.speed = Math.min(1.0, camera.speed + 0.05); break;
+        case 'r': case 'R':
+            if (!reloading && ammo < maxAmmo) startReload();
             break;
         case ' ':
             fire(); break;
