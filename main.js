@@ -248,13 +248,13 @@ function setupInput(canvas) {
 // called on init and whenever room size changes
 function uploadRoom(W, D) {
     // delete old buffers from gpu if they exist
-    for (var i = 0; i < roomPieces.length; i++) {
-        gl.deleteBuffer(roomPieces[i].posBuffer);
-        gl.deleteBuffer(roomPieces[i].normBuffer);
-        gl.deleteBuffer(roomPieces[i].idxBuffer);
-        gl.deleteBuffer(roomPieces[i].edgeBuffer);
+    for (var i = 0; i < roomBuffers.length; i++) {
+        gl.deleteBuffer(roomBuffers[i].posBuffer);
+        gl.deleteBuffer(roomBuffers[i].normBuffer);
+        gl.deleteBuffer(roomBuffers[i].idxBuffer);
+        gl.deleteBuffer(roomBuffers[i].edgeBuffer);
     }
-    roomPieces = [];
+    roomBuffers = [];
 
     var pieces = buildRoomPieces(W, D);
     for (var i = 0; i < pieces.length; i++) {
@@ -276,7 +276,7 @@ function uploadRoom(W, D) {
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, eb);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, d.edgeIndices, gl.STATIC_DRAW);
 
-        roomPieces.push({
+        roomBuffers.push({
             posBuffer: pb,
             normBuffer: nb,
             idxBuffer: ib,
