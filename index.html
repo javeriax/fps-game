@@ -169,6 +169,19 @@
             z-index: 11;
         }
 
+        #accuracy {
+            position: fixed;
+            bottom: 60px;   
+            left: 20px;
+            color: rgba(0, 255, 220, 0.9);
+            font-size: 22px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            pointer-events: none;
+            text-shadow: 0 0 12px rgba(0, 255, 200, 0.6);
+            z-index: 11;
+        }
+
         #ammo {
             position: fixed;
             bottom: 20px; right: 20px;
@@ -184,7 +197,7 @@
 
         #hud {
             position: fixed;
-            bottom: 65px; left: 20px;
+            bottom: 110px; left: 20px;
             color: rgba(100, 180, 200, 0.55);
             font-size: 11px;
             letter-spacing: 1px;
@@ -225,6 +238,7 @@
     <div id="crosshair"></div>
     <div id="clickPrompt">[ click to enter ]</div>
     <div id="score">SCORE: 0</div>
+    <div id="accuracy">ACCURACY: 0%</div>
     <div id="modeDisplay">MODE: SMOOTH</div>
     <div id="ammo">30 / 30</div>
     <div id="hud">
@@ -233,11 +247,10 @@
         <span>Q / E</span> LEAN &nbsp;&nbsp;
         <span>F</span> FOV<br>
         <span>V / B</span> SPEED &nbsp;&nbsp;
-        <span>O</span> NEAR CLIP<br>
+        <span>O / P</span> NEAR CLIP<br>
         <span>T / Y</span> FAR CLIP<br>
         <span>1 / 2 / 3</span> SHADING &nbsp;&nbsp;
-        <span>R</span> RELOAD &nbsp;&nbsp;
-        <span>P</span> RESET VIEW
+        <span>R</span> RESET VIEW
     </div>
 
     <script src="webgl-utils.js"></script>

@@ -148,7 +148,9 @@ function initDummies() {
         var d = {
             position: dummyPositions[i].slice(),
             scale: [1, 1, 1],
-            color: dummyColors[i],
+            color: dummyColors[i].slice(),
+            baseColor: dummyColors[i].slice(),
+            hitTimer: 0,
             fallAngle: 0,
             fallState: "standing",
             fallTimer: 0,
@@ -188,6 +190,15 @@ function buildDummyModelMatrix(dummy) {
 function updateDummies(dt) {
     for (var i = 0; i < dummies.length; i++) {
         var d = dummies[i];
+
+        if (d.hitTimer > 0) {
+            d.hitTimer -= dt;
+            if (d.hitTimer <= 0) {
+                d.color = d.baseColor.slice();
+                d.hitTimer = 0;
+            }
+        }
+
         if (d.fallState === "falling") {
             d.fallAngle += (90 / 0.4) * dt;
             if (d.fallAngle >= 90) {
@@ -228,12 +239,12 @@ function triggerGunKick() {
 }
 
 function buildGunModelMatrix() {
-    var tx = 0.32 + gunBobX;
+    var tx = 0.38 + gunBobX;
     var ty = -0.32 + gunBobY + gunKickY;
-    var tz = -0.55 + gunKickZ;
+    var tz = -0.45 + gunKickZ;
 
     var T = cam_T(tx, ty, tz);
-    var Ry = cam_Ry(180 + 2);
+    var Ry = cam_Ry(180 - 20);
     var Rx = cam_Rx(-4);
     var S = cam_S(gunNormScale, gunNormScale, gunNormScale);
     var center = cam_T(-gunCenter[0], -gunCenter[1], -gunCenter[2]);

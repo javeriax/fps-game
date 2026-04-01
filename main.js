@@ -131,6 +131,11 @@ window.onload = function init() {
     setupInput(canvas);
 
     lastTime = performance.now() / 1000;
+
+    updateScoreDisplay();
+    updateAccuracyDisplay();
+    updateAmmoDisplay();
+
     render();
 };
 
@@ -250,18 +255,17 @@ function handleKeyDown(e) {
         case 'o': case 'O':
             camera.near = Math.max(0.01, camera.near - 0.05); break;
         case 'p': case 'P':
-            camera.yaw = 0; camera.pitch = 0;
-            camera.leanAngle = 0; camera.leanOffset = 0;
-            camera.x = 0; camera.y = 1.65; camera.z = 4;
-            camera.fovy = 60; camera.near = 0.1; camera.far = 200;
-            camera.speed = 0.25;
-            break;
+            camera.near = Math.min(5.0, camera.near + 0.05); break;
         case 'v': case 'V':
             camera.speed = Math.max(0.05, camera.speed - 0.05); break;
         case 'b': case 'B':
             camera.speed = Math.min(1.0, camera.speed + 0.05); break;
         case 'r': case 'R':
-            if (!reloading && ammo < maxAmmo) startReload();
+            camera.yaw = 0; camera.pitch = 0;
+            camera.leanAngle = 0; camera.leanOffset = 0;
+            camera.x = 0; camera.y = 1.65; camera.z = 4;
+            camera.fovy = 60; camera.near = 0.1; camera.far = 200;
+            camera.speed = 0.25;
             break;
         case ' ':
             fire(); break;
@@ -296,6 +300,8 @@ function fire() {
     var now = performance.now();
     if (now - lastFireTime < 150) return;
     lastFireTime = now;
+    shotsFired++;
+    updateAccuracyDisplay();
 
     ammo--;
     triggerGunKick();
@@ -326,6 +332,10 @@ function fire() {
     var muzzleWorld = getMuzzleWorldPos();
     if (hitIndex >= 0) {
         score++;
+        hits++;
+        updateAccuracyDisplay();
+        dummies[hitIndex].color = [1.0, 1.0, 1.0];
+        dummies[hitIndex].hitTimer = 0.2;
         dummies[hitIndex].fallState = "falling";
         dummies[hitIndex].aabbActive = false;
         dummies[hitIndex].fallAngle = 0;
@@ -398,6 +408,15 @@ function updateAmmoDisplay() {
 
 function updateScoreDisplay() {
     document.getElementById('score').textContent = 'SCORE: ' + score;
+}
+
+function updateAccuracyDisplay() {
+    var acc = 0;
+    if (shotsFired > 0) {
+        acc = (hits / shotsFired) * 100;
+    }
+    document.getElementById('accuracy').textContent =
+        'ACCURACY: ' + acc.toFixed(0) + '%';
 }
 
 
